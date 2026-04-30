@@ -1,35 +1,41 @@
+@import "tailwindcss";
 @import './base.css';
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+@theme {
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-border: #e5e5e5;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+  --color-line-1: #e74c3c;
+  --color-line-2: #3498db;
+  --color-line-3: #2ecc71;
+  --color-line-4: #f39c12;
+  --color-line-5: #9b59b6;
+  --color-line-6: #1abc9c;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-card: 0 4px 16px rgb(0 0 0 / 0.06);
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
-@media (min-width: 1024px) {
+@layer base {
+  html,
   body {
-    display: flex;
-    place-items: center;
+    margin: 0;
+    padding: 0;
+    @apply h-screen bg-bg text-text font-system;
   }
 
   #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
+    @apply w-full h-screen;
   }
 }
