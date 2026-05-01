@@ -1,16 +1,10 @@
 <script setup lang="ts">
+import type { LatLngPoint, LatLngTuple } from '@/utils/types';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
-type LatLngTuple = [number, number];
-
-type LatLngObject = {
-	lat: number;
-	lng: number;
-};
-
-type NodeInput = LatLngTuple | LatLngObject;
+type NodeInput = LatLngTuple | LatLngPoint;
 
 const props = defineProps<{
 	departureNodes: NodeInput[];

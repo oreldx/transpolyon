@@ -3,6 +3,7 @@ import type { Station } from '@/api/velov.api';
 import AppPage from '@/components/AppPage.vue';
 import LeafletCentroidMap from '@/components/LeafletCentroidMap.vue';
 import { useDataStore } from '@/stores/data';
+import type { LatLngPoint } from '@/utils/types';
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
@@ -21,6 +22,28 @@ const parseStationIds = (queryParam: unknown): string[] => {
 	}
 
 	return Array.isArray(queryParam) ? queryParam.map(String) : [String(queryParam)];
+};
+
+const parseLatLngPoint = (queryParam: unknown): LatLngPoint | null => {
+	if (!queryParam) {
+		return null;
+	}
+
+	const rawValue = Array.isArray(queryParam) ? queryParam[0] : queryParam;
+	if (typeof rawValue !== 'string') {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(rawValue) as Partial<LatLngPoint>;
+		if (typeof parsed.lat !== 'number' || typeof parsed.lng !== 'number') {
+			return null;
+		}
+
+		return { lat: parsed.lat, lng: parsed.lng };
+	} catch {
+		return null;
+	}
 };
 
 const totalBikes = (station: Station) => station.bikes.normal + station.bikes.electric;
@@ -65,16 +88,30 @@ const findClosestToCentroid = (candidates: Station[], centroid: { lat: number; l
 	return closestStation.station;
 };
 
-const toGoogleMapsPoint = (station: Station) =>
-	`${station.coordinates.lat},${station.coordinates.lng}`;
+const toGoogleMapsPoint = (point: LatLngPoint) => `${point.lat},${point.lng}`;
 
-const toGoogleMapsDirectionsUrl = (origin: Station, destination: Station) => {
+const stationToPoint = (station: Station): LatLngPoint => ({
+	lat: station.coordinates.lat,
+	lng: station.coordinates.lng,
+});
+
+const areSamePoint = (a: LatLngPoint, b: LatLngPoint) => a.lat === b.lat && a.lng === b.lng;
+
+const toGoogleMapsDirectionsUrl = (
+	origin: LatLngPoint,
+	destination: LatLngPoint,
+	waypoints: LatLngPoint[] = [],
+) => {
 	const params = new URLSearchParams({
 		api: '1',
 		origin: toGoogleMapsPoint(origin),
 		destination: toGoogleMapsPoint(destination),
 		travelmode: 'bicycling',
 	});
+
+	if (waypoints.length) {
+		params.set('waypoints', waypoints.map(toGoogleMapsPoint).join('|'));
+	}
 
 	return `https://www.google.com/maps/dir/?${params.toString()}`;
 };
@@ -98,21 +135,11 @@ const availableArrivals = computed(() =>
 );
 
 const departureNodes = computed(() =>
-	availableDepartures.value.map((station) => ({
-		lat: station.coordinates.lat,
-		lng: station.coordinates.lng,
-	})),
+	availableDepartures.value.map((station) => stationToPoint(station)),
 );
 
 const arrivalNodes = computed(() =>
-	availableArrivals.value.map((station) => ({
-		lat: station.coordinates.lat,
-		lng: station.coordinates.lng,
-	})),
-);
-
-const isPathPossible = computed(
-	() => availableDepartures.value.length > 0 && availableArrivals.value.length > 0,
+	availableArrivals.value.map((station) => stationToPoint(station)),
 );
 
 const alternativeDeparture = computed(() => {
@@ -179,14 +206,72 @@ const selectedArrivalForDirections = computed(() => {
 	);
 });
 
+const departureAddressPoint = computed(() => parseLatLngPoint(route.query.departureAddress));
+const arrivalAddressPoint = computed(() => parseLatLngPoint(route.query.arrivalAddress));
+
+const googleOriginPoint = computed<LatLngPoint | null>(() => {
+	if (departureAddressPoint.value) {
+		return departureAddressPoint.value;
+	}
+
+	const station = selectedDepartureForDirections.value;
+	if (!station) {
+		return null;
+	}
+
+	return {
+		lat: station.coordinates.lat,
+		lng: station.coordinates.lng,
+	};
+});
+
+const googleDestinationPoint = computed<LatLngPoint | null>(() => {
+	if (arrivalAddressPoint.value) {
+		return arrivalAddressPoint.value;
+	}
+
+	const station = selectedArrivalForDirections.value;
+	if (!station) {
+		return null;
+	}
+
+	return {
+		lat: station.coordinates.lat,
+		lng: station.coordinates.lng,
+	};
+});
+
+const googleWaypoints = computed<LatLngPoint[]>(() => {
+	const points: LatLngPoint[] = [];
+
+	if (selectedDepartureForDirections.value) {
+		points.push(stationToPoint(selectedDepartureForDirections.value));
+	}
+
+	if (selectedArrivalForDirections.value) {
+		points.push(stationToPoint(selectedArrivalForDirections.value));
+	}
+
+	if (!googleOriginPoint.value || !googleDestinationPoint.value) {
+		return points;
+	}
+
+	return points.filter(
+		(point) =>
+			!areSamePoint(point, googleOriginPoint.value!) &&
+			!areSamePoint(point, googleDestinationPoint.value!),
+	);
+});
+
 const alternativeDirectionsUrl = computed(() => {
-	if (!selectedDepartureForDirections.value || !selectedArrivalForDirections.value) {
+	if (!googleOriginPoint.value || !googleDestinationPoint.value) {
 		return null;
 	}
 
 	return toGoogleMapsDirectionsUrl(
-		selectedDepartureForDirections.value,
-		selectedArrivalForDirections.value,
+		googleOriginPoint.value,
+		googleDestinationPoint.value,
+		googleWaypoints.value,
 	);
 });
 
@@ -303,9 +388,10 @@ const isArrivalAvailable = (station: Station) => station.availableSpots >= minim
 			</a>
 
 			<LeafletCentroidMap
-				:departure-nodes="departureNodes"
-				:arrival-nodes="arrivalNodes"
-				v-if="isPathPossible"
+				:departure-nodes="
+					alternativeDeparture ? [stationToPoint(alternativeDeparture)] : departureNodes
+				"
+				:arrival-nodes="alternativeArrival ? [stationToPoint(alternativeArrival)] : arrivalNodes"
 			/>
 		</div>
 	</AppPage>

@@ -4,6 +4,7 @@ import AppPage from '@/components/AppPage.vue';
 import BaseIcon from '@/components/BaseIcon.vue';
 import LeafletCentroidMap from '@/components/LeafletCentroidMap.vue';
 import BikeBasket from '@/components/icons/BikeBasket.vue';
+import { useGeocode } from '@/composables/useGeocode';
 import { useDataStore } from '@/stores/data';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -11,13 +12,29 @@ import { storeToRefs } from 'pinia';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
 type StationListType = 'departure' | 'arrival';
+type SelectionMode = 'stations' | 'addresses';
 
 const dataStore = useDataStore();
 const { stations, isLoading, error } = storeToRefs(dataStore);
 const { refetch } = dataStore;
 
+const {
+	data: geocodeData,
+	isLoading: isGeocodeLoading,
+	error: geocodeError,
+	search,
+} = useGeocode();
+
 const departureStations = ref<Station[]>([]);
 const arrivalStations = ref<Station[]>([]);
+const selectionMode = ref<SelectionMode>('stations');
+
+const departureAddress = ref('12 Rue de la Republique, Lyon');
+const departurePoint = ref<{ lat: number; lng: number } | null>(null);
+const arrivalAddress = ref('6 Place Bellecour, Lyon');
+const arrivalPoint = ref<{ lat: number; lng: number } | null>(null);
+const maxRadiusMeters = ref(500);
+
 const isModalOpen = ref(false);
 const currentList = ref<StationListType>('departure');
 const selectedStations = ref<Station[]>([]);
@@ -55,6 +72,14 @@ const monitorUrl = computed(() => {
 	const params = new URLSearchParams();
 	departureStations.value.forEach((station) => params.append('departure', station.id.toString()));
 	arrivalStations.value.forEach((station) => params.append('arrival', station.id.toString()));
+
+	if (departurePoint.value) {
+		params.append('departureAddress', JSON.stringify(departurePoint.value));
+	}
+
+	if (arrivalPoint.value) {
+		params.append('arrivalAddress', JSON.stringify(arrivalPoint.value));
+	}
 
 	return `/monitor?${params.toString()}`;
 });
@@ -151,6 +176,60 @@ const removeStation = (listType: StationListType, stationId: number) => {
 	}
 };
 
+const getFirstGeocodeCoordinates = () => {
+	const firstFeature = geocodeData.value?.features?.[0];
+
+	if (!firstFeature) {
+		return null;
+	}
+
+	const [lng, lat] = firstFeature.geometry.coordinates;
+	if (typeof lat !== 'number' || typeof lng !== 'number') {
+		return null;
+	}
+
+	return { lat, lng };
+};
+
+const findStationsWithinRadius = (origin: { lat: number; lng: number }, radiusMeters: number) =>
+	stations.value.filter((station) => {
+		const originPoint = L.latLng(origin.lat, origin.lng);
+		const stationPoint = L.latLng(station.coordinates.lat, station.coordinates.lng);
+		return originPoint.distanceTo(stationPoint) <= radiusMeters;
+	});
+
+const findStationsFromAddresses = async () => {
+	if (!departureAddress.value.trim() || !arrivalAddress.value.trim()) {
+		return;
+	}
+
+	if (!stations.value.length && !isLoading.value) {
+		await refetch();
+	}
+
+	if (!stations.value.length) {
+		departureStations.value = [];
+		arrivalStations.value = [];
+		return;
+	}
+
+	const radiusMeters = Math.max(50, Number(maxRadiusMeters.value) || 50);
+	maxRadiusMeters.value = radiusMeters;
+
+	await search(departureAddress.value.trim());
+	departurePoint.value = getFirstGeocodeCoordinates();
+
+	await search(arrivalAddress.value.trim());
+	arrivalPoint.value = getFirstGeocodeCoordinates();
+
+	departureStations.value = departurePoint.value
+		? findStationsWithinRadius(departurePoint.value, radiusMeters)
+		: [];
+	arrivalStations.value = arrivalPoint.value
+		? findStationsWithinRadius(arrivalPoint.value, radiusMeters)
+		: [];
+};
+
 watch([remainingStations, selectedStations], () => {
 	if (isModalOpen.value) {
 		renderStationMarkers();
@@ -173,7 +252,43 @@ onBeforeUnmount(() => {
 				</BaseIcon>
 				Velov configuration
 			</h2>
-			<section class="grid gap-4 md:grid-cols-2">
+			<section>
+				<p>Use either a departure and arrival address or select specific stations to monitor.</p>
+			</section>
+
+			<section
+				class="rounded-lg border border-border bg-surface p-2 shadow-card"
+				aria-label="Selection mode"
+			>
+				<div class="grid grid-cols-2 gap-2">
+					<button
+						type="button"
+						class="rounded-md px-4 py-2 text-sm font-medium transition-colors"
+						:class="
+							selectionMode === 'stations'
+								? 'bg-line-2 text-white'
+								: 'bg-bg text-text hover:bg-border/70'
+						"
+						@click="selectionMode = 'stations'"
+					>
+						Station selection
+					</button>
+					<button
+						type="button"
+						class="rounded-md px-4 py-2 text-sm font-medium transition-colors"
+						:class="
+							selectionMode === 'addresses'
+								? 'bg-line-1 text-white'
+								: 'bg-bg text-text hover:bg-border/70'
+						"
+						@click="selectionMode = 'addresses'"
+					>
+						Address selection
+					</button>
+				</div>
+			</section>
+
+			<section v-if="selectionMode === 'stations'" class="grid gap-4 md:grid-cols-2">
 				<article
 					class="rounded-lg border border-border bg-surface p-4 shadow-card flex flex-col gap-2"
 				>
@@ -247,8 +362,73 @@ onBeforeUnmount(() => {
 				</article>
 			</section>
 
+			<section
+				v-else
+				class="rounded-lg border border-border bg-surface p-4 shadow-card flex flex-col gap-4"
+			>
+				<header class="flex items-center justify-between gap-3">
+					<h3 class="text-lg font-semibold text-text">Address route</h3>
+				</header>
+
+				<div class="grid gap-4 md:grid-cols-2">
+					<label class="flex flex-col gap-2">
+						<span class="text-sm font-medium text-text">Departure address</span>
+						<input
+							v-model="departureAddress"
+							type="text"
+							placeholder="Type a departure address"
+							class="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors focus:border-line-2"
+						/>
+					</label>
+
+					<label class="flex flex-col gap-2">
+						<span class="text-sm font-medium text-text">Arrival address</span>
+						<input
+							v-model="arrivalAddress"
+							type="text"
+							placeholder="Type an arrival address"
+							class="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors focus:border-line-1"
+						/>
+					</label>
+				</div>
+
+				<div class="grid gap-2 md:max-w-xs">
+					<label class="text-sm font-medium text-text" for="max-radius">Max radius (meters)</label>
+					<input
+						id="max-radius"
+						v-model.number="maxRadiusMeters"
+						type="number"
+						min="50"
+						step="50"
+						class="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors focus:border-line-3"
+					/>
+				</div>
+
+				<button
+					type="button"
+					class="rounded-md bg-line-2 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-info"
+					:class="{ 'opacity-50 pointer-events-none': !departureAddress || !arrivalAddress }"
+					:disabled="!departureAddress || !arrivalAddress || isGeocodeLoading"
+					@click="findStationsFromAddresses"
+				>
+					{{ isGeocodeLoading ? 'Searching...' : 'Find stations' }}
+				</button>
+
+				<p v-if="geocodeError" class="text-sm text-error">
+					{{ geocodeError.message }}
+				</p>
+
+				<p
+					v-else-if="departureStations.length || arrivalStations.length"
+					class="text-sm text-text-muted"
+				>
+					Found {{ departureStations.length }} departure station(s) and
+					{{ arrivalStations.length }} arrival station(s) within {{ maxRadiusMeters }}m.
+				</p>
+			</section>
+
 			<!-- TODO: fix mobile overlap issue -->
-			<div class="z-0">
+			<div v-if="selectionMode === 'stations'" class="z-0">
 				<LeafletCentroidMap :departure-nodes="departureNodes" :arrival-nodes="arrivalNodes" />
 			</div>
 

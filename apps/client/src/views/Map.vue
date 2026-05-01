@@ -49,7 +49,6 @@ watch(stations, (newStations) => {
 </script>
 
 <template>
-	{{ stations.length }}
 	<div class="flex flex-col md:flex-row w-full h-screen">
 		<div id="map" class="flex-1 md:flex-1 z-0" />
 
