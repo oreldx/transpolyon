@@ -3,25 +3,17 @@ import type { Station } from '@/api/velov.api';
 import BaseIcon from '@/components/BaseIcon.vue';
 import BikeBasket from '@/components/icons/BikeBasket.vue';
 import ElectricBike from '@/components/icons/ElectricBike.vue';
-import { useVelov } from '@/composables/useVelov';
+import { useDataStore } from '@/stores/data';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { storeToRefs } from 'pinia';
 import { onMounted, ref, watch, type Ref } from 'vue';
 
 const initialMap: Ref<L.Map | null> = ref(null);
 const selectedStation: Ref<Station | null> = ref(null);
 
-const { error, fetchStations, stations, isLoading } = useVelov();
-
-onMounted(() => {
-	initialMap.value = L.map('map').setView([45.75, 4.85], 14);
-	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		maxZoom: 19,
-		attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-	}).addTo(initialMap.value);
-
-	fetchStations();
-});
+const dataStore = useDataStore();
+const { stations } = storeToRefs(dataStore);
 
 const addPin = (station: Station) => {
 	if (initialMap.value) {
@@ -34,6 +26,19 @@ const addPin = (station: Station) => {
 	}
 };
 
+onMounted(() => {
+	initialMap.value = L.map('map').setView([45.75, 4.85], 14);
+	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		maxZoom: 19,
+		attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+	}).addTo(initialMap.value);
+	if (stations.value.length > 0) {
+		stations.value.forEach((station) => {
+			addPin(station);
+		});
+	}
+});
+
 watch(stations, (newStations) => {
 	if (initialMap.value) {
 		newStations.forEach((station) => {
@@ -44,6 +49,7 @@ watch(stations, (newStations) => {
 </script>
 
 <template>
+	{{ stations.length }}
 	<div class="flex flex-col md:flex-row w-full h-screen">
 		<div id="map" class="flex-1 md:flex-1 z-0" />
 

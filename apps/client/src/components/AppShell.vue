@@ -1,36 +1,22 @@
 <script setup lang="ts">
-import Config from '@/views/Config.vue';
-import Map from '@/views/Map.vue';
-import Monitor from '@/views/Monitor.vue';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
+import { useRoute } from 'vue-router';
 
-const routes: Record<string, typeof Map> = {
-	map: Map,
-	config: Config,
-	monitor: Monitor,
-};
-
-const currentRoute = computed(() => {
-	const path = window.location.pathname.split('/')[1] || 'map';
-	return routes[path] || Map;
-});
+const route = useRoute();
 
 const isNavOpen = ref(false);
 
 const navItems = [
-	{ label: 'Map', id: 'map', href: '/map' },
-	{ label: 'Monitor', id: 'monitor', href: '/monitor' },
-	{ label: 'Config', id: 'config', href: '/config' },
+	{ label: 'Map', id: 'map', to: '/map' },
+	{ label: 'Monitor', id: 'monitor', to: '/monitor' },
+	{ label: 'Config', id: 'config', to: '/config' },
 ];
-
-const activeNav = ref(window.location.pathname.split('/')[1] || 'map');
 
 const toggleNav = () => {
 	isNavOpen.value = !isNavOpen.value;
 };
 
-const selectNav = (id: string) => {
-	activeNav.value = id;
+const selectNav = () => {
 	isNavOpen.value = false;
 };
 </script>
@@ -47,14 +33,14 @@ const selectNav = (id: string) => {
 			</div>
 			<ul class="flex flex-col gap-1 list-none m-0 p-0">
 				<li v-for="item in navItems" :key="item.id">
-					<a
+					<RouterLink
 						class="block w-full text-left px-4 py-3 text-sm font-medium text-text-muted rounded-md transition-all hover:bg-bg hover:text-text"
-						:class="{ ' text-text font-semibold border-2 border-border': activeNav === item.id }"
-						@click="selectNav(item.id)"
-						:href="item.href"
+						:class="{ ' text-text font-semibold border-2 border-border': route.path === item.to }"
+						@click="selectNav"
+						:to="item.to"
 					>
 						{{ item.label }}
-					</a>
+					</RouterLink>
 				</li>
 			</ul>
 		</nav>
@@ -85,21 +71,21 @@ const selectNav = (id: string) => {
 		>
 			<ul class="flex flex-col gap-1 list-none m-0 p-2">
 				<li v-for="item in navItems" :key="item.id">
-					<a
+					<RouterLink
 						class="block w-full text-left px-4 py-3 text-sm font-medium text-text-muted rounded-md transition-all hover:bg-bg hover:text-text"
-						:class="{ 'bg-bg text-text font-semibold': activeNav === item.id }"
-						@click="selectNav(item.id)"
-						:href="item.href"
+						:class="{ 'bg-bg text-text font-semibold': route.path === item.to }"
+						@click="selectNav"
+						:to="item.to"
 					>
 						{{ item.label }}
-					</a>
+					</RouterLink>
 				</li>
 			</ul>
 		</nav>
 
 		<!-- Main Content Area -->
 		<main class="overflow-auto bg-bg">
-			<component :is="currentRoute" />
+			<RouterView />
 		</main>
 	</div>
 </template>
