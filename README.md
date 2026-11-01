@@ -13,4 +13,4 @@ Une app web légère pour monitorer mes daily commutes dans Lyon en utilisant l'
 
 - Frontend: Vue
 - Backend: Fastify
-- Base de données: /
+- Base de données: SQLite (Node.js 24), voir le [contrat serveur](apps/server/README.md).

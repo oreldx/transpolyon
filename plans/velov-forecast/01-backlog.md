@@ -2,7 +2,7 @@
 
 Ce fichier est l’unique source d’avancement du chantier. Chaque unité correspond à une PR ; les numéros ci-dessous sont des identifiants d’unité, pas des numéros GitHub. Les titres restent stables une fois une unité lancée.
 
-- [ ] **1. Persistance et contrats de données** (`02-fondations.md`)
+- [x] (#1) **1. Persistance et contrats de données** (`02-fondations.md`) — Plan initial versionné avec cette unité ; voir le point de vigilance 11.
 - [ ] **2. Collecte autonome des disponibilités** (`02-fondations.md`, dépend de 1)
 - [ ] **3. Gestion des stations suivies** (`02-fondations.md`, dépend de 1)
 - [ ] **4. Premier déploiement sur homeserver** (`03-exploitation.md`, dépend de 2)

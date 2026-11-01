@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { createVelovRepo, type RawVelovStation } from './repo.ts';
+import type { Station } from '../../../velov/contracts.ts';
 
 interface VelovStation {
 	id: number;
@@ -39,6 +40,22 @@ export const createVelovService = (fastify: FastifyInstance) => {
 	};
 
 	return {
+		async getCatalogue(): Promise<Station[]> {
+			const rawStations = await velovRepo.getStationsLive();
+			const collectedAt = new Date().toISOString();
+			return rawStations.values.map((station) => ({
+				id: station.number,
+				name: station.name,
+				address: station.address,
+				latitude: station.lat,
+				longitude: station.lng,
+				status: station.status,
+				capacity: station.total_stands.capacity,
+				source: 'grandlyon-live',
+				sourceUpdatedAt: station.last_update,
+				collectedAt,
+			}));
+		},
 		async getStations() {
 			const rawStations = await velovRepo.getStationsLive();
 			const formattedStations = rawStations.values.map(formatStation);
